@@ -7,8 +7,16 @@ import { z } from "zod"
 import { Plus, Trash2, FileDown, RefreshCw, BookOpen, GraduationCap } from "lucide-react"
 import { motion, AnimatePresence } from "framer-motion"
 import { useInView } from "framer-motion"
-import jsPDF from "jspdf"
-import "jspdf-autotable"
+import { jsPDF } from "jspdf";
+import { autoTable } from "jspdf-autotable";
+
+// Extend jsPDF type to include autoTable
+import "jspdf-autotable";
+
+// Extend jsPDF internal type to include getNumberOfPages
+interface jsPDFInternal {
+  getNumberOfPages: () => number;
+}
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -90,8 +98,8 @@ export function GpaCalculator() {
   const [pdfContent, setPdfContent] = useState<any>(null)
 
   // Refs for scroll sections
-  const gpaRef = useRef(null)
-  const cgpaRef = useRef(null)
+  const gpaRef = useRef<HTMLDivElement | null>(null)
+  const cgpaRef = useRef<HTMLDivElement | null>(null)
 
   // Animation refs
   const gpaInView = useInView(gpaRef, { once: true, amount: 0.3 })
@@ -304,7 +312,8 @@ export function GpaCalculator() {
 
           // Validate the semester
           try {
-            semesterSchema.shape[field].parse(Number(value))
+            // Use type assertion to resolve the indexing issue
+            ;(semesterSchema.shape[field as keyof typeof semesterSchema.shape] as z.ZodNumber).parse(Number(value))
 
             // Clear error if validation passes
             return {
@@ -416,62 +425,30 @@ export function GpaCalculator() {
   // Handle actual PDF download for GPA
   const downloadGpaPdf = () => {
     try {
-      const doc = new jsPDF()
+      const doc = new jsPDF();
 
       // Set document properties
       doc.setProperties({
         title: `Semester GPA Calculator (${maxGrade}-Point Scale)`,
         subject: "GPA Calculation",
         creator: "GPA Calculator",
-      })
-
-      // Add BFA watermark
-      doc.setTextColor(220, 220, 220) // Light gray for watermark
-      doc.setFontSize(80)
-      doc.setFont("helvetica", "bold")
-      // Calculate center of the page
-      const pageWidth = doc.internal.pageSize.width
-      const pageHeight = doc.internal.pageSize.height
-      // Add rotated text
-      doc.text("BFA", pageWidth / 2, pageHeight / 2, {
-        align: "center",
-        angle: -45,
-      })
+      });
 
       // Add title with styling
-      doc.setFillColor(240, 240, 240) // Light gray background for header
-      doc.rect(0, 0, doc.internal.pageSize.width, 30, "F")
-      doc.setFontSize(18)
-      doc.setTextColor(0, 0, 0)
-      doc.setFont("helvetica", "bold")
-      doc.text(`Semester GPA Calculator (${maxGrade}-Point Scale)`, 14, 15)
+      doc.setFontSize(18);
+      doc.setFont("helvetica", "bold");
+      doc.text(`Semester GPA Calculator (${maxGrade}-Point Scale)`, 14, 15);
 
-      // Add date
-      doc.setFontSize(10)
-      doc.setFont("helvetica", "normal")
-      doc.text(`Generated on: ${new Date().toLocaleDateString()}`, 14, 25)
-
-      // Add courses table with improved styling - removed Weighted Points column
-      doc.setFontSize(14)
-      doc.setFont("helvetica", "bold")
-      doc.text("Courses:", 14, 40)
-
-      const coursesData = courses.map((course, index) => [
-        `Course ${index + 1}`,
-        course.name,
-        course.creditUnits.toString(),
-        course.gradePoint.toString(),
-      ])
-
-      // Check if autoTable is available
-      if (typeof doc.autoTable !== "function") {
-        throw new Error("autoTable function not available. Make sure jspdf-autotable is properly imported.")
-      }
-
-      doc.autoTable({
-        startY: 45,
+      // Add courses table using autoTable
+      autoTable(doc, {
         head: [["No.", "Course Name", "Credit Units", "Grade Point"]],
-        body: coursesData,
+        body: courses.map((course, index) => [
+          `Course ${index + 1}`,
+          course.name,
+          course.creditUnits.toString(),
+          course.gradePoint.toString(),
+        ]),
+        startY: 20,
         headStyles: {
           fillColor: [0, 0, 0],
           textColor: [255, 255, 255],
@@ -484,7 +461,7 @@ export function GpaCalculator() {
           fontSize: 10,
           cellPadding: 5,
         },
-      })
+      });
 
       // Add GPA result with styled box
       const finalY = (doc as any).lastAutoTable.finalY + 15
@@ -502,7 +479,7 @@ export function GpaCalculator() {
       doc.text(calculateGPA(), 100, finalY + 7)
 
       // Add footer
-      const pageCount = doc.internal.getNumberOfPages()
+      const pageCount = doc.internal.pages.length - 1;
       doc.setFontSize(8)
       doc.setTextColor(100, 100, 100)
       for (let i = 1; i <= pageCount; i++) {
@@ -516,91 +493,59 @@ export function GpaCalculator() {
       }
 
       // Save the PDF
-      doc.save(`Semester_GPA_${new Date().toISOString().slice(0, 10)}.pdf`)
+      doc.save(`Semester_GPA_${new Date().toISOString().slice(0, 10)}.pdf`);
     } catch (error) {
-      console.error("Error generating PDF:", error)
+      console.error("Error generating PDF:", error);
       toast({
         title: "PDF Generation Failed",
         description: "There was an error creating your PDF. Please try again.",
         variant: "destructive",
-      })
+      });
     }
   }
 
   // Handle actual PDF download for CGPA
   const downloadCgpaPdf = () => {
     try {
-      const doc = new jsPDF()
+      const doc = new jsPDF();
 
       // Set document properties
       doc.setProperties({
         title: "Cumulative GPA (CGPA) Calculator",
         subject: "CGPA Calculation",
         creator: "GPA Calculator",
-      })
-
-      // Add BFA watermark
-      doc.setTextColor(220, 220, 220) // Light gray for watermark
-      doc.setFontSize(80)
-      doc.setFont("helvetica", "bold")
-      // Calculate center of the page
-      const pageWidth = doc.internal.pageSize.width
-      const pageHeight = doc.internal.pageSize.height
-      // Add rotated text
-      doc.text("BFA", pageWidth / 2, pageHeight / 2, {
-        align: "center",
-        angle: -45,
-      })
+      });
 
       // Add title with styling
-      doc.setFillColor(240, 240, 240) // Light gray background for header
-      doc.rect(0, 0, doc.internal.pageSize.width, 30, "F")
-      doc.setFontSize(18)
-      doc.setTextColor(0, 0, 0)
-      doc.setFont("helvetica", "bold")
-      doc.text("Cumulative GPA (CGPA) Calculator", 14, 15)
-
-      // Add date
-      doc.setFontSize(10)
-      doc.setFont("helvetica", "normal")
-      doc.text(`Generated on: ${new Date().toLocaleDateString()}`, 14, 25)
+      doc.setFontSize(18);
+      doc.setFont("helvetica", "bold");
+      doc.text("Cumulative GPA (CGPA) Calculator", 14, 15);
 
       // Add previous CGPA info in a styled box
-      doc.setFillColor(245, 245, 245)
-      doc.roundedRect(14, 35, 85, 25, 3, 3, "F")
-      doc.roundedRect(105, 35, 85, 25, 3, 3, "F")
+      doc.setFillColor(245, 245, 245);
+      doc.roundedRect(14, 35, 85, 25, 3, 3, "F");
+      doc.roundedRect(105, 35, 85, 25, 3, 3, "F");
 
-      doc.setFontSize(12)
-      doc.setFont("helvetica", "bold")
-      doc.text("Previous CGPA:", 20, 45)
-      doc.setFont("helvetica", "normal")
-      doc.text(previousCGPA.toString(), 75, 45)
+      doc.setFontSize(12);
+      doc.setFont("helvetica", "bold");
+      doc.text("Previous CGPA:", 20, 45);
+      doc.setFont("helvetica", "normal");
+      doc.text(previousCGPA.toString(), 75, 45);
 
-      doc.setFont("helvetica", "bold")
-      doc.text("Previous Credits:", 110, 45)
-      doc.setFont("helvetica", "normal")
-      doc.text(previousTotalCredits.toString(), 170, 45)
+      doc.setFont("helvetica", "bold");
+      doc.text("Previous Credits:", 110, 45);
+      doc.setFont("helvetica", "normal");
+      doc.text(previousTotalCredits.toString(), 170, 45);
 
-      // Add semesters table with improved styling
-      doc.setFontSize(14)
-      doc.setFont("helvetica", "bold")
-      doc.text("Semesters:", 14, 70)
-
-      const semestersData = semesters.map((semester, index) => [
-        `Semester ${index + 1}`,
-        semester.gpa.toString(),
-        semester.totalCreditUnits.toString(),
-      ])
-
-      // Check if autoTable is available
-      if (typeof doc.autoTable !== "function") {
-        throw new Error("autoTable function not available. Make sure jspdf-autotable is properly imported.")
-      }
-
-      doc.autoTable({
+      // Add semesters table using autoTable
+      autoTable(doc, {
         startY: 75,
         head: [["Semester", "GPA", "Credit Units"]],
-        body: semestersData,
+        body: semesters.map((semester, index) => [
+          `Semester ${index + 1}`,
+          semester.gpa.toString(),
+          semester.totalCreditUnits.toString(),
+        ]),
         headStyles: {
           fillColor: [0, 0, 0],
           textColor: [255, 255, 255],
@@ -613,46 +558,45 @@ export function GpaCalculator() {
           fontSize: 10,
           cellPadding: 5,
         },
-      })
+      });
 
       // Add CGPA result with styled box
-      const finalY = (doc as any).lastAutoTable.finalY + 15
+      const finalY = (doc as any).lastAutoTable.finalY + 15;
+      doc.setFillColor(240, 240, 240); // Light gray background
+      doc.roundedRect(14, finalY - 5, 180, 30, 3, 3, "F");
 
-      // Add result box with styling
-      doc.setFillColor(240, 240, 240) // Light gray background
-      doc.roundedRect(14, finalY - 5, 180, 30, 3, 3, "F")
+      doc.setFontSize(14);
+      doc.setFont("helvetica", "bold");
+      doc.text("Cumulative GPA (CGPA):", 20, finalY + 7);
 
-      doc.setFontSize(14)
-      doc.setFont("helvetica", "bold")
-      doc.text("Cumulative GPA (CGPA):", 20, finalY + 7)
-
-      doc.setFontSize(16)
-      doc.setTextColor(0, 0, 0)
-      doc.text(calculateCGPA(), 120, finalY + 7)
+      doc.setFontSize(16);
+      doc.setTextColor(0, 0, 0);
+      doc.text(calculateCGPA(), 120, finalY + 7);
 
       // Add footer
-      const pageCount = doc.internal.getNumberOfPages()
-      doc.setFontSize(8)
-      doc.setTextColor(100, 100, 100)
+      const pageCount = doc.internal.pages.length - 1; // Subtract 1 because the first index is empty
+      doc.setFontSize(8);
+      doc.setTextColor(100, 100, 100);
       for (let i = 1; i <= pageCount; i++) {
-        doc.setPage(i)
+        doc.setPage(i);
         doc.text(
-          "Generated by GPA Calculator - Page " + i + " of " + pageCount,
+          /* `Generated by GPA Calculator - Page ${i} of ${pageCount}`, */
+          `Generated by GPA Calculator`,
           doc.internal.pageSize.width / 2,
           doc.internal.pageSize.height - 10,
-          { align: "center" },
-        )
+          { align: "center" }
+        );
       }
 
       // Save the PDF
-      doc.save(`CGPA_${new Date().toISOString().slice(0, 10)}.pdf`)
+      doc.save(`CGPA_${new Date().toISOString().slice(0, 10)}.pdf`);
     } catch (error) {
-      console.error("Error generating PDF:", error)
+      console.error("Error generating PDF:", error);
       toast({
         title: "PDF Generation Failed",
         description: "There was an error creating your PDF. Please try again.",
         variant: "destructive",
-      })
+      });
     }
   }
 
