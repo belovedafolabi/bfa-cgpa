@@ -717,7 +717,7 @@ export function GpaCalculator() {
               <div>
                 <CardTitle>CGPA Calculator</CardTitle>
                 <CardDescription>
-                  Add your previous CGPA and new semesters to calculate your updated CGPA
+                  Add your all previous CGPA and new semesters to calculate your updated CGPA
                 </CardDescription>
                 <div className="flex max-w-fit items-center text-sm font-normal bg-primary/10 text-primary px-2 py-1 rounded-full mt-2 semester-badge">
                   <GraduationCap className="h-4 w-4 mr-1" />
